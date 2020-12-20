@@ -1,6 +1,6 @@
 import pandas as pd
-pd.set_option('display.max_columns', 20)
-pd.set_option('display.width', 200)
+pd.set_option('display.max_columns', 15)
+pd.set_option('display.width', 150)
 
 
 # Returns simple moving average with provided span
@@ -84,19 +84,27 @@ def get_crossover_point(series_one, series_two):
 
 # Logic for a naive buying strategy on a specific weekday at certain intervals.
 # If the buy amount is < share price, the share quantity bought will be 1. Assumes no fractional shares.
-def dca_buy_point(asset_data, weekday, strategy, interval, usd_buy_amount, start=None, allow_fractional=False):
-
+def dca_buy_report(asset_data, weekday, strategy, interval, usd_buy_amount, allow_fractional=False):
 
     buy_dates = asset_data.index[asset_data.index.weekday == weekday][::interval]
-    buy_dates = buy_dates[buy_dates > start] if start is not None else buy_dates
-    buy_df = asset_data.loc[buy_dates, [strategy]]
+    buy_df = asset_data.loc[buy_dates, ['Open', 'Close']]
 
     prelim_share_amount = (usd_buy_amount / buy_df[strategy])
     buy_df['Shares Bought'] = prelim_share_amount if allow_fractional else prelim_share_amount.astype(int).replace(0, 1)
     buy_df['Balance'] = buy_df['Shares Bought'].expanding().apply(sum)
+    if not allow_fractional:
+        buy_df['Balance'] = buy_df['Balance'].astype(int)
     buy_df['Cost Basis'] = (buy_df['Shares Bought'] * buy_df[strategy]).expanding().apply(sum) / buy_df['Balance']
-    buy_df['Unrealized PNL'] = buy_df['Balance'] * (buy_df['Close'] - buy_df['Cost Basis'])
-    
     buy_df['Cumulative Spend'] = (buy_df['Shares Bought'] * buy_df[strategy]).expanding().apply(sum)
+    buy_df = asset_data.merge(buy_df.drop(['Open', 'Close'], axis=1),
+                              how='left', left_index=True, right_index=True)
+
+    fill_cols = ['Balance', 'Cost Basis', 'Cumulative Spend']
+    buy_df.loc[:, fill_cols] = buy_df.loc[:, fill_cols].fillna(method='ffill')
+    buy_df.fillna(0, inplace=True)
+
+    buy_df['Unrealized PNL'] = buy_df['Balance'] * (buy_df['Close'] - buy_df['Cost Basis'])
     buy_df['Value'] = buy_df['Balance'] * buy_df['Close']
     buy_df['ROE %'] = (buy_df['Value'] / buy_df['Cumulative Spend'] - 1) * 100
+
+    return buy_df, buy_dates
