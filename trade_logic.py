@@ -1,4 +1,6 @@
 import pandas as pd
+import numpy as np
+import datetime
 pd.set_option('display.max_columns', 15)
 pd.set_option('display.width', 150)
 
@@ -108,3 +110,71 @@ def dca_buy_report(asset_data, weekday, strategy, interval, usd_buy_amount, allo
     buy_df['ROE %'] = (buy_df['Value'] / buy_df['Cumulative Spend'] - 1) * 100
 
     return buy_df, buy_dates
+
+# See https://oxfordstrat.com/indicators/td-sequential-2/ for more details on TD implementation
+def td_strategy(td_df, long_bool=True):
+
+    def td_setup_func(bool_arr):
+        # O(n) loop. Could likely improve on complexity, but am unsure how.
+        new_arr = list()
+        count = 0
+
+        for obs in bool_arr:
+            if obs == True:
+                count = count + 1
+            else:
+                count = 0
+            new_arr.append(count)
+        return new_arr
+
+    def td_countdown_func(bool_arr):
+        # O(n) loop. Could likely improve on complexity, but am unsure how.
+        new_arr = list()
+        count = 0
+
+        for obs in bool_arr:
+            if obs == True:
+                count = count + 1
+                new_arr.append(count)
+            else:
+                new_arr.append(np.nan)
+        return new_arr
+
+
+    close_df = td_df['Close'].to_numpy()
+    countdown_df = td_df[['Close', 'Low', 'High']]
+
+    # Intersection
+    # Boolean of TD; greater/lesser than last 4 closes.
+
+    if long_bool:
+        td_setup = np.append(np.full(4, np.nan),
+                               [(close_df[idx] < close_df[idx - 4]) for idx in range(4, len(close_df))])
+    else:
+        td_setup = np.append(np.full(4, np.nan),
+                                [(close_df[idx] > close_df[idx - 4]) for idx in range(4, len(close_df))])
+        
+    setup_count = pd.Series(td_setup_func(td_setup), index=td_df.index)
+    td_nines = setup_count.index[setup_count == 9]
+
+    countdown_list = list()
+    for idx in range(0, len(td_nines)):
+        start = td_nines[idx]
+        start_idx = td_df.index[td_df.index.get_loc(start) - 2]
+
+        if idx + 1 == len(td_nines):
+            end = start_idx + datetime.timedelta(days=35)
+        else:
+            end = min(td_nines[idx + 1], start_idx + datetime.timedelta(days=35))
+
+        countdown_span = countdown_df.loc[start_idx:end + datetime.timedelta(days=1)]
+
+        if long_bool:
+            td_countdown = [(countdown_span.loc[:, 'Close'][idx] < countdown_span.loc[:, 'Low'][idx - 2])
+                              for idx in range(2, len(countdown_span))]
+        else:
+            td_countdown = [(countdown_span.loc[:, 'Close'][idx] > countdown_span.loc[:, 'High'][idx - 2])
+                            for idx in range(2, len(countdown_span))]
+        countdown_list.append(pd.Series(td_countdown_func(td_countdown), index=countdown_span.index[2:]))
+
+    countdowns = pd.concat(countdown_list)
