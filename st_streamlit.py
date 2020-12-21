@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import yfinance as yf
 import streamlit as st
 
@@ -27,32 +28,76 @@ history, info = load_ticker(selected_ticker) # Load in Data
 
 if selected_page == pages[0]:
 
-    buy_col, sell_col = st.beta_columns(2)
+    buy_params_one, buy_params_two, sell_params_one, sell_params_two = st.beta_columns(4)
 
-    with buy_col:
-        buy_strategy = st.selectbox('Select Buying Strategy', list(trade_logic.buy_strategies.keys()))
-        buy_strategy_span = st.number_input('Buy MA Span', value=25)
+    available_buy_strategies = list(trade_logic.strategies.keys())
+    available_buy_strategies.remove('Hold/None')
 
-    with sell_col:
-        sell_strategy = st.selectbox('Select Selling Strategy', list(trade_logic.sell_strategies.keys()))
-        sell_strategy_span = st.number_input('Sell MA Span', value=25)
+    with buy_params_one:
+        buy_strategy = st.selectbox('Select Buying Strategy', available_buy_strategies)
+        buy_scaling = st.number_input('Select MA Scaling (<=1.00)', value=1.00, step=0.01) \
+            if 'Crossover' not in buy_strategy else None
+
+    with buy_params_two:
+        buy_ma_span_one = st.number_input('1st Crossover MA Span (Short Term)', value=25, strep=5) \
+            if 'Crossover' in buy_strategy else st.number_input('Buy MA Span', value=25, step=5)
+        buy_ma_span_two = st.number_input('2nd Crossover MA Span (Long Term)', value=150, step=10) \
+            if 'Crossover' in buy_strategy else None
+        
+    with sell_params_one:
+        sell_strategy = st.selectbox('Select Selling Strategy', list(trade_logic.strategies.keys()))
+        sell_scaling = st.number_input('Select MA Scaling (>=1.00)', value=1.00, step=0.01) \
+            if pd.Series([_ not in sell_strategy for _ in ['Crossover', 'Hold', 'Countdown']]).all() else None
+
+    with sell_params_two:
+        if 'Crossover' in sell_strategy:
+            sell_ma_span_one = st.number_input('1st Crossover MA Span (Short Term)', value=25, step=5)
+        elif 'Hold' not in sell_strategy:
+            sell_ma_span_one = st.number_input('Sell MA Span', value=25, step=5)
+        else:
+            sell_ma_span_one = None
+        sell_ma_span_two = st.number_input('2nd Crossover MA Span (Long Term)', value=150, step=10) \
+            if 'Crossover' in sell_strategy else None
+
+    buy_ma_spans = [buy_ma_span_one, buy_ma_span_two]
+    final_buy_spans = buy_ma_spans if pd.notnull(buy_ma_spans).all() else [buy_ma_span_one]
+
+    sell_ma_spans = [sell_ma_span_one, sell_ma_span_two]
+    final_sell_spans = sell_ma_spans if pd.notnull(sell_ma_spans).all() else [sell_ma_span_one]
+
+    gap_days = st.sidebar.number_input('Select Minimum Day Gap Between Buys', value=7, step=1)
+
+    # TODO: Add PNL calculation to different strategies
+    # Buy Decisions
+    decision, price_point, ma_lines = trade_logic.get_trades(strategy=buy_strategy,
+                                                   long_bool=True,
+                                                   asset_data=history,
+                                                   gap=gap_days,
+                                                   spans=final_buy_spans,
+                                                   scaling=buy_scaling)
+    buy_series = (price_point * decision).replace(0, np.nan)
 
     fig = plot_funcs.plot_candlestick(history)
+    fig = plot_funcs.plot_ma(figure=fig, ma_dict=ma_lines)
+    fig = plot_funcs.plot_decisions(figure=fig, decision=decision, price_point=price_point, long_bool=True)
 
-    fig = plot_funcs.plot_buys(figure=fig,
-                               plot_data=history,
-                               strategy=buy_strategy,
-                               ma_span=buy_strategy_span,
-                               scaling=0.95)
 
-    fig = plot_funcs.plot_sells(figure=fig,
-                               plot_data=history,
-                               strategy=sell_strategy,
-                               ma_span=sell_strategy_span,
-                               scaling=1.05)
+    if 'Hold' not in sell_strategy:
+        # Sell Decisions
+        decision, price_point, ma_lines = trade_logic.get_trades(strategy=sell_strategy,
+                                                                 long_bool=False,
+                                                                 asset_data=history,
+                                                                 gap=0,
+                                                                 spans=final_sell_spans,
+                                                                 scaling=sell_scaling)
+        buy_series = (price_point * decision).replace(0, np.nan)
+
+        fig = plot_funcs.plot_ma(figure=fig, ma_dict=ma_lines)
+        fig = plot_funcs.plot_decisions(figure=fig, decision=decision, price_point=price_point, long_bool=False)
 
     st.plotly_chart(fig, use_container_width=True, height=1500)
 
+# Dollar Cost Averaging
 if selected_page == pages[1]:
 
     weekdays = {'Monday': 0,

@@ -22,66 +22,67 @@ buy_strategies = {'Buy on SMA': sma_line,
                   'Buy on SMA Crossover': sma_line}
 
 sell_strategies = {'Sell on SMA': sma_line,
-              'Sell on EMA': ema_line}
+                   'Sell on EMA': ema_line,
+                   'Hold/None': None}
+
+strategies = {'On SMA': sma_line,
+              'On EMA': ema_line,
+              'On SMA Crossover': sma_line,
+              'On EMA Crossover': ema_line,
+              'Hold/None': None,
+              'TD Countdown': None}
 
 interval_strategy = {'Weekly': 1,
                  'Bi-Monthly': 2,
                  'Monthly': 4}
 
-# Returns the buy date if the daiy price reaches the selected strategy's line.
-# Gap prevents buys within small timeframes. ie: Gap of 7 = maximum of a weekly buy frequency
+# Gap prevents buys/sells within small timeframes. ie: Gap of 7 = maximum of a weekly buy frequency
 # Returns boolean series with Buy=1, No Buy=0 along with Respective Moving Average(s)
-def get_buy_point(asset_data, strategy, gap=0, span=None, scaling=1):
+def get_trades(asset_data, long_bool, strategy, gap=0, spans=(None), scaling=1):
 
-    # TODO: Should the buy point depend on the last day of data (hypothetical purchase date?)
-    daily_low = asset_data['Low']
+    ma_dict = {}
+    if strategy in ['On SMA', 'On EMA']:
+        ma_type = strategy.split('On ')[-1]
+        trade_func = strategies.get(strategy)
+        trade_bound = asset_data['High'] if long_bool else asset_data['Low']
+        trade_point = trade_func(asset_data['Close'], span=spans[0]) * scaling # Buy/Sell on the MA line
+        crossover_line = get_crossover_point(trade_bound, trade_point, upward=long_bool)
+        ma_dict = {f'{ma_type} ({spans[0]})': trade_point}
 
-    buy_point = buy_strategies.get(strategy)(asset_data['Close'], span) * scaling
 
-    crossover_sma1 = sma_line(asset_data['Close'], span=200)
-    crossover_sma2 = sma_line(asset_data['Close'], span=150)
+    elif strategy in ['On SMA Crossover', 'On EMA Crossover']:
+        ma_type = strategy.split(' Crossover')[0].split('On ')[-1]
+        trade_func = strategies.get(strategy)
+        ma_one = trade_func(asset_data['Close'], span=spans[0])
+        ma_two = trade_func(asset_data['Close'], span=spans[1])
+        crossover_line = get_crossover_point(ma_one, ma_two, upward=long_bool)
+        trade_point = asset_data.loc[crossover_line.index, 'Close']
+        ma_dict = {f'{ma_type} ({spans[0]})': ma_one,
+                    f'{ma_type} ({spans[1]})': ma_two}
 
-
-    # Line 1 Intersects Line 2 between points 0 and 1 when l1_0 < l2_0 & l1_1 > l2_1
-    crossover_line = ((daily_low < buy_point) & (daily_low.shift(1) > buy_point.shift(1))).astype(int)
+    elif strategy == 'TD Countdown':
+        decision, trade_point = td_strategy(td_df=asset_data, long_bool=long_bool)
+        return decision, trade_point, ma_dict
 
     # TODO: make compatible with date index
     if gap > 0:
         new_line = [value if (value == 1 and (1 != crossover_line.values[idx + 1: idx + gap + 1]).all())
-                                   else 0 for idx, value in zip(range(0, len(crossover_line)), crossover_line.values)]
+                    else 0 for idx, value in zip(range(0, len(crossover_line)), crossover_line.values)]
         crossover_line = pd.Series(data=new_line,
-                             index=crossover_line.index)
-    return crossover_line, buy_point
+                                   index=crossover_line.index)
+
+    return crossover_line, trade_point, ma_dict
 
 
-# Returns the buy date if the daiy price reaches the selected strategy's line.
-# Gap prevents buys within small timeframes. ie: Gap of 7 = maximum of a weekly buy frequency
-# Returns boolean series with Buy=1, No Buy=0 along with Respective Moving Average(s)
-def get_sell_point(asset_data, strategy, gap=0, span=None, scaling=1):
+# Returns series of  0, 1 values. 1 = series_one crosses series two, 0 = No Cross
+def get_crossover_point(series_one, series_two, upward=True):
 
-    # TODO: Should the buy point depend on the last day of data (hypothetical purchase date?)
-    daily_high = asset_data['High']
+    if upward:
+        cross_series = ((series_one < series_two) & (series_one.shift(1) > series_two.shift(1))).astype(int)
+    else:
+        cross_series = ((series_one > series_two) & (series_one.shift(1) < series_two.shift(1))).astype(int)
 
-    sell_point = sell_strategies.get(strategy)(asset_data['Close'], span) * scaling
-
-    # Line 1 Intersects Line 2 between points 0 and 1 when l1_0 < l2_0 & l1_1 > l2_1
-    crossover_line = ((daily_high > sell_point) & (daily_high.shift(1) < sell_point.shift(1))).astype(int)
-
-    # TODO: make compatible with date index
-    if gap > 0:
-        new_line = [value if (value == 1 and (1 != crossover_line.values[idx + 1: idx + gap + 1]).all())
-                                   else 0 for idx, value in zip(range(0, len(crossover_line)), crossover_line.values)]
-        crossover_line = pd.Series(data=new_line,
-                             index=crossover_line.index)
-    return crossover_line, sell_point
-
-# Returns series of -1, 0, 1 values. 1 = series_one crosses upward, -1 = series_two crosses upward, 0 = No Cross
-def get_crossover_point(series_one, series_two):
-
-    downward_cross = ((series_one > series_two) & (series_one.shift(1) < series_two.shift(1))).astype(int)
-    upward_cross = ((series_one < series_two) & (series_one.shift(1) > series_two.shift(1))).astype(int)
-
-    return upward_cross, downward_cross
+    return cross_series
 
 
 # Logic for a naive buying strategy on a specific weekday at certain intervals.
@@ -144,16 +145,15 @@ def td_strategy(td_df, long_bool=True):
     close_df = td_df['Close'].to_numpy()
     countdown_df = td_df[['Close', 'Low', 'High']]
 
-    # Intersection
     # Boolean of TD; greater/lesser than last 4 closes.
-
     if long_bool:
         td_setup = np.append(np.full(4, np.nan),
                                [(close_df[idx] < close_df[idx - 4]) for idx in range(4, len(close_df))])
     else:
         td_setup = np.append(np.full(4, np.nan),
                                 [(close_df[idx] > close_df[idx - 4]) for idx in range(4, len(close_df))])
-        
+
+    # Gather the setups to calculate the countdowns thereafter
     setup_count = pd.Series(td_setup_func(td_setup), index=td_df.index)
     td_nines = setup_count.index[setup_count == 9]
 
@@ -178,3 +178,9 @@ def td_strategy(td_df, long_bool=True):
         countdown_list.append(pd.Series(td_countdown_func(td_countdown), index=countdown_span.index[2:]))
 
     countdowns = pd.concat(countdown_list)
+
+    decision = (countdowns == 13).astype(int)
+    trade_point = td_df.loc[:, 'Close']
+
+
+    return decision, trade_point

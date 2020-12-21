@@ -24,9 +24,8 @@ def plot_candlestick(plot_data):
 
 def plot_buys(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1):
 
-    decision, price_point = trade_logic.get_buy_point(strategy=strategy, asset_data=plot_data, gap=14, scaling=scaling)
+    decision, price_point = trade_logic.get_trades(strategy=strategy, long_bool=True, asset_data=plot_data, gap=14, scaling=scaling)
     buy_series = (price_point * decision).replace(0, np.nan)
-    marker_series = np.full(len(buy_series), 'triangle-up')
 
     figure.add_trace(go.Scatter(x=price_point.index,
                                 y=price_point.values,
@@ -44,9 +43,8 @@ def plot_buys(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1):
 
 def plot_sells(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1):
 
-    decision, price_point = trade_logic.get_sell_point(strategy=strategy, asset_data=plot_data, gap=14, scaling=scaling)
+    decision, price_point = trade_logic.get_trades(strategy=strategy, long_bool=False, asset_data=plot_data, gap=14, scaling=scaling)
     buy_series = (price_point * decision).replace(0, np.nan)
-    marker_series = np.full(len(buy_series), 'triangle-down')
 
     figure.add_trace(go.Scatter(x=price_point.index,
                              y=price_point.values,
@@ -62,6 +60,41 @@ def plot_sells(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1)
 
     return figure
 
+
+def plot_decisions(figure, decision, price_point, long_bool):
+
+    marker_dicts = {
+        True: dict(color='#009432', size=8, symbol='triangle-up'),
+        False: dict(color='#EA2027', size=8, symbol='triangle-down')
+                    }
+
+    decision_price = (price_point * decision).replace(0, np.nan)
+
+    # Add Marker
+    marker_name = 'Long Entry' if long_bool else 'Short Entry'
+    figure.add_trace(go.Scatter(x=decision_price.index,
+                                y=decision_price.values,
+                                mode='markers',
+                                marker=marker_dicts.get(long_bool),
+                                name=marker_name)
+                     )
+
+    return figure
+
+def plot_ma(figure, ma_dict):
+
+
+    for moving_average in list(ma_dict.keys()):
+        ma_line = ma_dict.get(moving_average)
+        figure.add_trace(go.Scatter(x=ma_line.index,
+                                    y=ma_line.values,
+                                    mode='lines',
+                                    name=moving_average)
+                         )
+
+    return figure
+
+# Used on the DCA page to track performance over time
 def dca_plot(dca_data, purchase_dates):
 
     figure = make_subplots(rows=2, cols=1, shared_xaxes=True,
