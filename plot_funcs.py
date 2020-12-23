@@ -24,44 +24,50 @@ def plot_candlestick(plot_data):
 
 def plot_buys(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1):
 
+    new_fig = go.Figure(figure)
+
     decision, price_point = trade_logic.get_trades(strategy=strategy, long_bool=True, asset_data=plot_data, gap=14, scaling=scaling)
     buy_series = (price_point * decision).replace(0, np.nan)
 
-    figure.add_trace(go.Scatter(x=price_point.index,
+    new_fig.add_trace(go.Scatter(x=price_point.index,
                                 y=price_point.values,
                                 mode='lines',
                                 line=dict(color='#0a3d62', width=1.5))
                   )
 
-    figure.add_trace(go.Scatter(x=buy_series.index,
+    new_fig.add_trace(go.Scatter(x=buy_series.index,
                              y=buy_series.values,
                              mode='markers',
                              marker=dict(color='#009432', size=8, symbol='triangle-up'))
                   )
 
-    return figure
+    return new_fig
 
 def plot_sells(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1):
+
+    new_fig = go.Figure(figure)
 
     decision, price_point = trade_logic.get_trades(strategy=strategy, long_bool=False, asset_data=plot_data, gap=14, scaling=scaling)
     buy_series = (price_point * decision).replace(0, np.nan)
 
-    figure.add_trace(go.Scatter(x=price_point.index,
+    new_fig.add_trace(go.Scatter(x=price_point.index,
                              y=price_point.values,
                              mode='lines',
                              line=dict(color='#6F1E51', width=1.5))
                   )
 
-    figure.add_trace(go.Scatter(x=buy_series.index,
+    new_fig.add_trace(go.Scatter(x=buy_series.index,
                              y=buy_series.values,
                              mode='markers',
                              marker=dict(color='#EA2027', size=8, symbol='triangle-down'))
                   )
 
-    return figure
+    return new_fig
 
 
 def plot_decisions(figure, decision, price_point, long_bool):
+
+    new_fig = go.Figure(figure)
 
     marker_dicts = {
         True: dict(color='#009432', size=8, symbol='triangle-up'),
@@ -72,27 +78,28 @@ def plot_decisions(figure, decision, price_point, long_bool):
 
     # Add Marker
     marker_name = 'Long Entry' if long_bool else 'Short Entry'
-    figure.add_trace(go.Scatter(x=decision_price.index,
+    new_fig.add_trace(go.Scatter(x=decision_price.index,
                                 y=decision_price.values,
                                 mode='markers',
                                 marker=marker_dicts.get(long_bool),
                                 name=marker_name)
                      )
 
-    return figure
+    return new_fig
 
 def plot_ma(figure, ma_dict):
 
+    new_fig = go.Figure(figure)
 
     for moving_average in list(ma_dict.keys()):
         ma_line = ma_dict.get(moving_average)
-        figure.add_trace(go.Scatter(x=ma_line.index,
+        new_fig.add_trace(go.Scatter(x=ma_line.index,
                                     y=ma_line.values,
                                     mode='lines',
                                     name=moving_average)
                          )
 
-    return figure
+    return new_fig
 
 # Used on the DCA page to track performance over time
 def dca_plot(dca_data, purchase_dates):

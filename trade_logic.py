@@ -4,7 +4,6 @@ import datetime
 pd.set_option('display.max_columns', 15)
 pd.set_option('display.width', 150)
 
-
 # Returns simple moving average with provided span
 def sma_line(series, span=None):
     if span is None:
@@ -17,19 +16,11 @@ def ema_line(series, span=None):
         span = 25
     return series.ewm(span).mean()
 
-buy_strategies = {'Buy on SMA': sma_line,
-                  'Buy on EMA': ema_line,
-                  'Buy on SMA Crossover': sma_line}
-
-sell_strategies = {'Sell on SMA': sma_line,
-                   'Sell on EMA': ema_line,
-                   'Hold/None': None}
-
-strategies = {'On SMA': sma_line,
+strategies = {'Hold/None': None,
+              'On SMA': sma_line,
               'On EMA': ema_line,
               'On SMA Crossover': sma_line,
               'On EMA Crossover': ema_line,
-              'Hold/None': None,
               'TD Countdown': None}
 
 interval_strategy = {'Weekly': 1,
@@ -75,12 +66,13 @@ def get_trades(asset_data, long_bool, strategy, gap=0, spans=(None), scaling=1):
 
 
 # Returns series of  0, 1 values. 1 = series_one crosses series two, 0 = No Cross
+# Series one should be of a lower span than series two.
 def get_crossover_point(series_one, series_two, upward=True):
 
     if upward:
-        cross_series = ((series_one < series_two) & (series_one.shift(1) > series_two.shift(1))).astype(int)
+        cross_series = ((series_one < series_two) & (series_one.shift(-1) > series_two.shift(-1))).astype(int)
     else:
-        cross_series = ((series_one > series_two) & (series_one.shift(1) < series_two.shift(1))).astype(int)
+        cross_series = ((series_one > series_two) & (series_one.shift(-1) < series_two.shift(-1))).astype(int)
 
     return cross_series
 
@@ -184,3 +176,65 @@ def td_strategy(td_df, long_bool=True):
 
 
     return decision, trade_point
+
+
+def pnl_calc(buy_series, sell_series, trade_size, allow_fractional=True, sell_all=True):
+
+    buy_df = pd.DataFrame(zip(buy_series.values, np.full(len(buy_series), 'Buy')), columns=['Price', 'Decision'],
+                          index=buy_series.index)
+    buy_df['Share Diff'] = (trade_size / buy_df['Price']) if allow_fractional \
+        else (trade_size / buy_df['Price']).astype(int).replace(0, 1) # Buy 1 Share at minimum.
+    sell_df = pd.DataFrame(zip(sell_series.values, np.full(len(sell_series), 'Sell')), columns=['Price', 'Decision'],
+                           index=sell_series.index).loc[buy_df.index[0]:]
+    if not sell_all:
+        sell_df['Share Diff'] = -(trade_size / sell_df['Price']) if allow_fractional \
+            else -(trade_size / sell_df['Price']).astype(int).replace(0, 1)
+
+    trade_df = pd.concat([buy_df, sell_df]).sort_index()
+
+    trade_df[['Share Balance', 'Balance Value', 'Cash Balance']] = np.nan
+    ['Stock Splits', 'Shares Bought', 'Balance', 'Cost Basis', 'Cumulative Spend', 'Unrealized PNL', 'Value', 'ROE %']
+
+    carryover_cols = ['Share Balance', 'Balance Value', 'Cash Balance']
+    carryover_balance = (0, 0, 0)
+    tranche_list = list()
+    start_index = trade_df.index[0]
+    for idx in sell_df.index:
+        tranche_until = idx + datetime.timedelta(days=1)
+        tranche = trade_df.loc[start_index: tranche_until].copy()
+        if tranche_until <= trade_df.index[-1]:
+            start_loc = trade_df.index.get_loc(tranche_until, method='bfill')
+            start_index = trade_df.index[start_loc]
+        else:
+            break
+        tranche_sell = tranche.index[-1]
+
+        if len(tranche.loc[tranche['Decision'] == 'Buy']) == 0:
+            if sell_all:
+                continue
+            elif carryover_balance[0] < np.abs(tranche.loc[tranche_sell, 'Share Diff']):
+                tranche.at[tranche_sell, 'Share Diff'] = -carryover_balance[0] # Limit sell to available balance
+
+        sell_price = tranche.loc[tranche_sell, 'Price']
+
+        if sell_all:
+            sell_amount = tranche['Share Diff'].sum()
+            tranche.at[tranche_sell, 'Share Diff'] = -sell_amount
+        else:
+            sell_amount = tranche.loc[tranche_sell, 'Share Diff']
+
+        tranche['Trade Value'] = tranche['Share Diff'].values * tranche['Price'].values
+
+        tranche.at[:, 'Share Balance'] = tranche.loc[:, 'Share Diff'].expanding().apply(sum).values + carryover_balance[0]
+        tranche.at[:, 'Balance Value'] = tranche.loc[:, 'Price'] * tranche.loc[:, 'Share Balance']
+        tranche.at[tranche_sell, 'Cash Balance'] = np.abs(sell_amount) * sell_price
+        tranche['Cash Balance'] = tranche['Cash Balance'].fillna(0) + carryover_balance[2]
+
+        #tranche.loc[tranche_sell, carryover_cols] = tranche.loc[tranche_sell, carryover_cols] + carryover_balance
+        carryover_balance = tuple(tranche.loc[tranche_sell, carryover_cols].values)
+
+        tranche_list.append(tranche)
+
+        print(tranche)
+
+    final_pnl = pd.concat(tranche_list)
