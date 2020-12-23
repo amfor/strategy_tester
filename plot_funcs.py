@@ -5,65 +5,33 @@ import pandas as pd
 import numpy as np
 import trade_logic
 
+# TODO: remove plot padding and simplify available plotly overlay options
+# TODO: fix color template for ma lines particularly
 
-def plot_candlestick(plot_data):
+def plot_candlestick(plot_data, candlesticks=True):
 
     # plot_data should have a datetime index & associated name
     figure = go.Figure()
 
-    figure.add_trace(go.Candlestick(x=plot_data.index,
-                                       open=plot_data.Open,
-                                       close=plot_data.Close,
-                                       high=plot_data.High,
-                                       low=plot_data.Low))
+    if candlesticks:
+        figure.add_trace(go.Candlestick(x=plot_data.index,
+                                           open=plot_data.Open,
+                                           close=plot_data.Close,
+                                           high=plot_data.High,
+                                           low=plot_data.Low,
+                                        name=f'{plot_data.name} Close Price'))
+    else:
+        figure.add_trace(go.Scatter(x=plot_data.index,
+                                        y=plot_data.Close,
+                                        mode='lines',
+                                        line=dict(color='black'),
+                                    name=plot_data.name,
+
+                                    ))
 
     figure.update_layout(template='plotly_white', xaxis_rangeslider_visible=True)
     figure.update_yaxes(tickformat='$')
     return figure
-
-
-def plot_buys(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1):
-
-    new_fig = go.Figure(figure)
-
-    decision, price_point = trade_logic.get_trades(strategy=strategy, long_bool=True, asset_data=plot_data, gap=14, scaling=scaling)
-    buy_series = (price_point * decision).replace(0, np.nan)
-
-    new_fig.add_trace(go.Scatter(x=price_point.index,
-                                y=price_point.values,
-                                mode='lines',
-                                line=dict(color='#0a3d62', width=1.5))
-                  )
-
-    new_fig.add_trace(go.Scatter(x=buy_series.index,
-                             y=buy_series.values,
-                             mode='markers',
-                             marker=dict(color='#009432', size=8, symbol='triangle-up'))
-                  )
-
-    return new_fig
-
-def plot_sells(figure, plot_data, ma_span=200, strategy='Buy on SMA', scaling=1):
-
-    new_fig = go.Figure(figure)
-
-    decision, price_point = trade_logic.get_trades(strategy=strategy, long_bool=False, asset_data=plot_data, gap=14, scaling=scaling)
-    buy_series = (price_point * decision).replace(0, np.nan)
-
-    new_fig.add_trace(go.Scatter(x=price_point.index,
-                             y=price_point.values,
-                             mode='lines',
-                             line=dict(color='#6F1E51', width=1.5))
-                  )
-
-    new_fig.add_trace(go.Scatter(x=buy_series.index,
-                             y=buy_series.values,
-                             mode='markers',
-                             marker=dict(color='#EA2027', size=8, symbol='triangle-down'))
-                  )
-
-    return new_fig
-
 
 def plot_decisions(figure, decision, price_point, long_bool):
 
