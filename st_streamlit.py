@@ -40,6 +40,8 @@ start_date = st.sidebar.slider('Select Trading Start Date',
 display_candlestick = st.sidebar.checkbox('Use Candlestick Chart', value=False)
 allow_fractional = st.sidebar.checkbox('Allow Fractional Shares', value=True)
 sell_all = st.sidebar.checkbox('Sell All Shares on Sell Decision', value=False)
+markers_bool = st.sidebar.checkbox('Use Markers for Decisions', value=False)
+
 
 
 if selected_page == pages[0]:
@@ -91,7 +93,6 @@ if selected_page == pages[0]:
     sell_ma_spans = [sell_ma_span_one, sell_ma_span_two]
     final_sell_spans = sell_ma_spans if pd.notnull(sell_ma_spans).all() else [sell_ma_span_one]
 
-    # TODO: Add PNL calculation to different strategies
     # Buy Decisions
     buy_decision, buy_point, buy_ma_lines = get_trades(strategy=buy_strategy,
                                                         long_bool=True,
@@ -101,64 +102,65 @@ if selected_page == pages[0]:
                                                         scaling=buy_scaling)
     buy_series = (buy_point * buy_decision).replace(0, np.nan).dropna()[start_date:]
 
+    # Sell Decisions
+    sell_decision, sell_point, sell_ma_lines = get_trades(strategy=sell_strategy,
+                                                            long_bool=False,
+                                                            asset_data=history,
+                                                            gap=0,
+                                                            spans=final_sell_spans,
+                                                            scaling=sell_scaling,
+                                                            start=start_date)
+    sell_series = (sell_point * sell_decision).replace(0, np.nan).dropna()
 
-
-    if 'Hold' not in sell_strategy:
-        # Sell Decisions
-        sell_decision, sell_point, sell_ma_lines = get_trades(strategy=sell_strategy,
-                                                                long_bool=False,
-                                                                asset_data=history,
-                                                                gap=0,
-                                                                spans=final_sell_spans,
-                                                                scaling=sell_scaling,
-                                                                start=start_date)
-        sell_series = (sell_point * sell_decision).replace(0, np.nan).dropna()
-    else:
-        sell_series = pd.Series()
 
     pnl_table = trade_logic.pnl_calc(asset_data=history,
                          buy_series=buy_series,
                          sell_series=sell_series,
                          trade_size=trade_size,
-                         allow_fractional=True,
-                         sell_all=True)
+                         allow_fractional=allow_fractional,
+                         sell_all=sell_all)
 
 
     # Get the proper data to plot (What we actually end up trading)
     plot_buy = (pnl_table['Decision'] == 'Buy').astype(int)
     plot_buy_price = pnl_table.loc[plot_buy.index, 'Price']
+    plot_sell = -(pnl_table['Decision'] == 'Sell').astype(int)
+    plot_sell_price = pnl_table.loc[plot_sell.index, 'Price']
+    combined_decisions = pd.concat([plot_buy, plot_sell])
+    combined_prices = pd.concat([plot_buy_price, plot_sell_price])
+
+    # Save and write closing position data
+    shares_owned = pnl_table.iloc[-1]['Share Balance']
+    balance = np.round(shares_owned, 2) if allow_fractional else int(shares_owned)
+    spend_str = '{:,.2f}$'.format(pnl_table.loc[pnl_table['Decision'] == 'Buy', 'Trade Value'].sum())
+    cash_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['Cash Balance'])
+    value_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['Balance Value'])
+    rpnl_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['RPNL'])
+    upnl_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['UPNL'])
+    total_value = '{:,.2f}$'.format(pnl_table.iloc[-1]['Cash Balance'] + pnl_table.iloc[-1]['UPNL'])
+
+    st.markdown(
+        f"At the end of the trading period, **{balance} shares ** remain, valued at **{value_str}**, "
+        f"with **{cash_str}** of fiat on hand. <br>  Cumulative cash spent is **{spend_str}**, "
+        f"representing **{rpnl_str}** of realized PnL, with **{upnl_str}** of unrealized PnL. <br>"
+        f"Total Fiat Value of portfolio: **{total_value}**",
+        unsafe_allow_html=True
+    )
 
     # Plot our Trades and MAs along with the close data or candlesticks
     fig = plot_funcs.plot_candlestick(history, display_candlestick)
     display_fig = fig
     display_fig.update_xaxes(range=[start_date, history.index[-1]])
-    display_fig = plot_funcs.plot_ma(figure=display_fig, ma_dict=buy_ma_lines)
-    display_fig = plot_funcs.plot_decisions(figure=display_fig, decision=plot_buy, price_point=plot_buy_price,
-                                            long_bool=True)
-    if 'Hold' not in sell_strategy:
-        plot_sell = (pnl_table['Decision'] == 'Sell').astype(int)
-        plot_sell_price = pnl_table.loc[plot_sell.index, 'Price']
-        display_fig = plot_funcs.plot_ma(figure=display_fig, ma_dict=sell_ma_lines)
-        display_fig = plot_funcs.plot_decisions(figure=display_fig, decision=plot_sell, price_point=plot_sell_price, long_bool=False)
+    display_fig = plot_funcs.plot_ma(figure=display_fig, ma_dict=buy_ma_lines, long_bool=True)
+    display_fig = plot_funcs.plot_ma(figure=display_fig, ma_dict=sell_ma_lines, long_bool=False)
+    display_fig = plot_funcs.plot_decisions(figure=display_fig,
+                                            decisions=combined_decisions,
+                                            price_point=combined_prices,
+                                            markers=markers_bool)
 
     st.plotly_chart(display_fig, use_container_width=True, height=1500)
 
     final_pos = dict(zip(pnl_table.columns, pnl_table.iloc[-1].values))
-
-    share_balance = pnl_table.iloc[-1]['Share Balance']
-    shares_owned = int(share_balance) if allow_fractional else share_balance
-    value_amount = '{:,.2f}'.format(pnl_table.iloc[-1]['Balance Value'])
-    cash_amount = '{:,.2f}$'.format(pnl_table.iloc[-1]['Cash Balance'])
-    cash_invested = '{:,.2f}$'.format(pnl_table.loc[pnl_table['Decision'] == 'Buy', 'Trade Value'].sum())
-
-
-    st.markdown(
-        f"At the end of the trading period, **{shares_owned}** remain, <br>"
-        f"valued at **{final_pos.get('Balance Value')}**, with {cash_amount} on hand. <br>"
-        f"{cash_invested} Cumulative cash was spent",
-
-        unsafe_allow_html=True
-    )
 
 # Dollar Cost Averaging
 if selected_page == pages[1]:

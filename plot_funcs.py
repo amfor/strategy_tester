@@ -6,7 +6,6 @@ import numpy as np
 import trade_logic
 
 # TODO: remove plot padding and simplify available plotly overlay options
-# TODO: fix color template for ma lines particularly
 
 def plot_candlestick(plot_data, candlesticks=True):
 
@@ -24,50 +23,74 @@ def plot_candlestick(plot_data, candlesticks=True):
         figure.add_trace(go.Scatter(x=plot_data.index,
                                         y=plot_data.Close,
                                         mode='lines',
-                                        line=dict(color='black'),
+                                        line=dict(color='#1e272e'),
                                     name=plot_data.name,
 
                                     ))
 
-    figure.update_layout(template='plotly_white', xaxis_rangeslider_visible=True)
+    figure.update_layout(template='plotly_white', margin=dict(l=20, r=20, t=20, b=20), xaxis_rangeslider_visible=True)
     figure.update_yaxes(tickformat='$')
     return figure
 
-def plot_decisions(figure, decision, price_point, long_bool):
+def plot_decisions(figure, decisions, price_point,  markers=True):
 
     new_fig = go.Figure(figure)
 
-    marker_dicts = {
-        True: dict(color='#009432', size=8, symbol='triangle-up'),
-        False: dict(color='#EA2027', size=8, symbol='triangle-down')
-                    }
+    trades = {'Buys': decisions == 1, 'Sells': decisions == -1}
+    if markers:
+        for decision in list(trades.keys()):
+            mask = trades.get(decision)
 
-    decision_price = (price_point * decision).replace(0, np.nan)
-
-    # Add Marker
-    marker_name = 'Long Entry' if long_bool else 'Short Entry'
-    new_fig.add_trace(go.Scatter(x=decision_price.index,
-                                y=decision_price.values,
-                                mode='markers',
-                                marker=marker_dicts.get(long_bool),
-                                name=marker_name)
-                     )
+            # Add Marker
+            decision_price = (price_point.loc[mask] * decisions.loc[mask].abs()).replace(0, np.nan)
+            marker_dicts = {
+                'Buys': dict(color='#009432', size=8, symbol='triangle-up'),
+                'Sells': dict(color='#EA2027', size=8, symbol='triangle-down')
+            }
+            marker_name = 'Long Entry' if decision == 'Buy' else 'Short Entry'
+            new_fig.add_trace(go.Scatter(x=decision_price.index,
+                                        y=decision_price.values,
+                                        mode='markers',
+                                        marker=marker_dicts.get(decision),
+                                        name=marker_name)
+                             )
+    else:
+        shapes = {}
+        for decision in list(trades.keys()):
+            mask = trades.get(decision)
+            line_dicts = {
+                'Buys': '#009432',
+                'Sells': '#EA2027'
+            }
+            decision_series = decisions.loc[mask]
+            line_color = line_dicts.get(decision)
+            for date in tuple(decision_series.index.date):
+                shapes[date.strftime('%Y-%m-%d')] = go.layout.Shape(line=dict(color=line_color, width=1),
+                             opacity=0.6, type='line', x0=date, x1=date, xref='x', y0=0, y1=1, yref='y domain')
+        new_fig.update_layout(shapes=list(shapes.values()))
 
     return new_fig
 
-def plot_ma(figure, ma_dict):
+def plot_ma(figure, ma_dict, long_bool):
 
     new_fig = go.Figure(figure)
 
-    for moving_average in list(ma_dict.keys()):
-        ma_line = ma_dict.get(moving_average)
-        new_fig.add_trace(go.Scatter(x=ma_line.index,
-                                    y=ma_line.values,
-                                    mode='lines',
-                                    name=moving_average)
-                         )
+    ma_keys = list(ma_dict.keys())
+    if len(ma_keys) == 0:
+        return new_fig
+    else:
+        colors = ("#006266", "#05c46b") if long_bool else ("#6F1E51", "#ff5e57")
+        ma_colors = dict(zip(ma_keys, colors))
 
-    return new_fig
+        for moving_average in ma_keys:
+            ma_line = ma_dict.get(moving_average)
+            new_fig.add_trace(go.Scatter(x=ma_line.index,
+                                            y=ma_line.values,
+                                            mode='lines',
+                                            line=dict(color=ma_colors.get(moving_average), width=1),
+                                            name=moving_average)
+                             )
+        return new_fig
 
 # Used on the DCA page to track performance over time
 def dca_plot(dca_data, purchase_dates):

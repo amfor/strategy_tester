@@ -31,9 +31,12 @@ interval_strategy = {'Weekly': 1,
 # Returns boolean series with Buy=1, No Buy=0 along with Respective Moving Average(s)
 def get_trades(asset_data, long_bool, strategy, gap=0, spans=(None), scaling=1, start=None):
 
+
     start = asset_data.index[0] if start is None else start
     ma_dict = {}
-    if strategy in ['On SMA', 'On EMA']:
+    if 'Hold' in strategy:
+        return pd.Series(dtype=float), pd.Series(dtype=float), ma_dict
+    elif strategy in ['On SMA', 'On EMA']:
         ma_type = strategy.split('On ')[-1]
         trade_func = strategies.get(strategy)
         trade_bound = (asset_data['High'] if long_bool else asset_data['Low']).loc[start:]
@@ -234,6 +237,9 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
         trade_df.at[:, 'Balance Value'] = trade_df['Price'].values * trade_df['Share Balance'].values
         trade_df.at[:, 'Cost Basis'] = np.divide((trade_df.loc[:, 'Price'] * trade_df.loc[:, 'Share Diff']).cumsum(),
                                                     trade_df.loc[:, 'Share Balance'])
+        trade_df.loc[:, 'UPNL'] = np.multiply(trade_df.loc[:, 'Price'] - trade_df.loc[:, 'Cost Basis'],
+                                              trade_df.loc[:, 'Share Balance'])
+        trade_df.loc[:, ['RPNL', 'Cash Balance']] = 0
         return trade_df
 
     carryover_cols = ['Share Balance', 'Balance Value', 'Cash Balance', 'Cost Basis']
@@ -297,8 +303,14 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
 
     # TODO: concat remaining buys
     # TODO: Add PNL measures
+
     final_pnl = pd.concat(tranche_list)
     if not final_pnl.index[final_pnl['Trade Value'] == 0].empty:
         final_pnl.drop(final_pnl.index[final_pnl['Trade Value'] == 0], inplace=True) # Remove excess sells
 
+    mask = final_pnl['Decision'] == 'Sell'
+    profit_margin = (final_pnl.loc[mask, 'Price'] - final_pnl.loc[mask, 'Cost Basis'])
+    final_pnl.loc[mask, 'RPNL'] = (profit_margin * -final_pnl.loc[mask, 'Share Diff']).cumsum()
+    final_pnl = final_pnl.ffill()
+    final_pnl.loc[:, 'UPNL'] = np.multiply(profit_margin, final_pnl.loc[:, 'Share Balance'])
     return final_pnl
