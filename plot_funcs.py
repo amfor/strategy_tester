@@ -101,7 +101,7 @@ def dca_plot(dca_data, purchase_dates):
                                   [{"secondary_y": True}]],
                            row_width=[0.65, 0.35]
                            )
-    figure.update_layout(template='plotly_white')
+    figure.update_layout(template='plotly_white', margin=dict(l=0))
 
 
     figure.add_trace(go.Scatter(x=dca_data.index, y=dca_data['Close'],
@@ -114,7 +114,7 @@ def dca_plot(dca_data, purchase_dates):
     buy_series = dca_data.loc[purchase_dates]
 
     figure.add_trace(go.Scatter(x=buy_series.index,
-                                y=buy_series['Balance'],
+                                y=buy_series['Share Balance'],
                                 mode='lines',
                                 line=dict(color='#ff793f'),
                                 name='Share Count'), row=2, col=1, secondary_y=False)

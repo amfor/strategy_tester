@@ -24,6 +24,11 @@ def get_trades(strategy, asset_data, long_bool, gap=0, spans=(None), scaling=1, 
     return trade_logic.get_trades(strategy=strategy, long_bool=long_bool, asset_data=asset_data, gap=gap,
                                     spans=spans, scaling=scaling, start=start)
 
+# Helper for Styling Trades Table
+def color_negative_red(val):
+    color = '#e55039' if val < 0 else '#60a3bc'
+    return 'background-color: %s' % color
+
 
 # Initial App Setup
 st.set_page_config(page_title='Strategy Tester', layout='wide', page_icon="📈")
@@ -51,9 +56,8 @@ markers_bool = st.sidebar.checkbox('Use Markers for Decisions', value=False)
 
 st.sidebar.title("About")
 st.sidebar.info(
-    "This app is intended to backtest the implemented trading strategies on whichever asset chosen. "
-    "Maintained by **Amy Forest**. \n\n"
-    "This project is available on [GitHub] (https://github.com/amfor/strat_test)"
+    "This app is intended to backtest the implemented trading strategies on the chosen asset.\n\n"
+    "Maintained by **Amy Forest** on [GitHub] (https://github.com/amfor/strat_test)"
 )
 st.sidebar.warning(
     "Note that all returns are hypothetical and not indicative of future performance."
@@ -178,7 +182,15 @@ if selected_page == pages[0]:
     final_pos = dict(zip(pnl_table.columns, pnl_table.iloc[-1].values))
 
     with st.beta_expander('View Trade History'):
-        st.dataframe(pnl_table)
+        trades_table = pnl_table.copy().drop(['Decision'], axis=1)
+        trades_table.index = trades_table.index.strftime('%Y/%m/%d')
+        share_columns = ['Share Diff', 'Share Balance']
+        float_columns = list(set(trades_table.dtypes[trades_table.dtypes == float].index).difference(share_columns))
+        st.table(trades_table.style.format(
+            "{:.2f}", subset=share_columns).format(
+            '{:,.2f}$', subset=float_columns).applymap(
+            color_negative_red, subset=pd.IndexSlice[:, 'Share Diff']
+        ))
 
 
 # Dollar Cost Averaging
@@ -216,9 +228,9 @@ if selected_page == pages[1]:
                                         allow_fractional=divisible)
 
     pnl_amount = '{:,.2f}'.format(dca_df['Unrealized PNL'][-1])
-    final_balance = dca_df['Balance'][-1]
+    final_balance = dca_df['Share Balance'][-1]
     shares_owned = int(final_balance) if float(final_balance).is_integer() else final_balance
-    share_count = '{:,.2f}'.format(dca_df['Balance'][-1])
+    share_count = '{:,.2f}'.format(final_balance)
     value_amount = '{:,.2f}'.format(dca_df['Value'][-1])
 
     st.markdown(
@@ -230,4 +242,14 @@ if selected_page == pages[1]:
     st.plotly_chart(plot_funcs.dca_plot(dca_df, purchase_dates), use_container_width=True, height=2000)
 
     with st.beta_expander('View Trade History'):
-        st.dataframe(dca_df[dca_df['Shares Bought'] > 0 ])
+        trades_table = dca_df.loc[dca_df['Shares Bought'] > 0]
+        trades_table.index = trades_table.index.strftime('%Y/%m/%d')
+        pct_columns = ['ROE %']
+        share_columns = ['Shares Bought', 'Share Balance']
+        float_columns = ['Close', 'Cost Basis', 'Cumulative Spend', 'Unrealized PNL', 'Value']
+        st.table(
+            trades_table.style.format(
+                "{:.2f}", subset=share_columns).format(
+                "{:,.2f}$", subset=float_columns).format(
+                "{:.2%}", subset=pct_columns)
+        )
