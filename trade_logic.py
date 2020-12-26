@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
 import datetime
-pd.set_option('display.max_columns', 15)
-pd.set_option('display.width', 150)
 
 # Returns simple moving average with provided span
 def sma_line(series, span=None):
@@ -52,14 +50,12 @@ def get_trades(asset_data, long_bool, strategy, gap=0, spans=(None), scaling=1, 
         ma_two = trade_func(asset_data['Close'], span=spans[1])
         crossover_line = get_crossover_point(ma_one, ma_two, upward=long_bool).loc[start:]
         trade_point = asset_data.loc[crossover_line.index, 'Close']
-        ma_dict = {f'{ma_type} ({spans[0]})': ma_one,
-                    f'{ma_type} ({spans[1]})': ma_two}
+        ma_dict = {f'{ma_type} ({spans[0]})': ma_one, f'{ma_type} ({spans[1]})': ma_two}
 
     elif strategy == 'TD Countdown':
         decision, trade_point = td_strategy(td_df=asset_data, long_bool=long_bool, start_date=start)
         return decision, trade_point, ma_dict
 
-    # TODO: make compatible with date index
     if gap > 0:
         new_line = [value if (value == 1 and (1 != crossover_line.values[idx + 1: idx + gap + 1]).all())
                     else 0 for idx, value in zip(range(0, len(crossover_line)), crossover_line.values)]
@@ -105,6 +101,8 @@ def dca_buy_report(asset_data, weekday, strategy, interval, usd_buy_amount, allo
     buy_df['Unrealized PNL'] = buy_df['Balance'] * (buy_df['Close'] - buy_df['Cost Basis'])
     buy_df['Value'] = buy_df['Balance'] * buy_df['Close']
     buy_df['ROE %'] = (buy_df['Value'] / buy_df['Cumulative Spend'] - 1) * 100
+
+    buy_df.drop(['Low', 'High', 'Open', 'Volume', 'Dividends', 'Stock Splits'], axis=1, inplace=True)
 
     return buy_df, buy_dates
 
@@ -217,7 +215,14 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
     buy_df['Share Diff'] = (trade_size / buy_df['Price']) if allow_fractional \
         else (trade_size / buy_df['Price']).astype(int).replace(0, 1) # Buy 1 Share at minimum.
 
+    # Return empty DF if no buys occur
+    if buy_series.empty:
+        table_columns = ['Price', 'Decision', 'Share Diff', 'Closing Price', 'Share Balance', 'Balance Value',
+                         'Cash Balance', 'Cost Basis', 'Trade Value', 'UPNL', 'RPNL']
+        return pd.DataFrame(np.full((1, len(table_columns)), 0), columns=table_columns, index=[datetime.date.today()])
+
     proper_sells = sell_series[buy_series.index[0]:]
+    statement_end_entry = asset_data.iloc[-1]
 
     if not proper_sells.empty:
         sell_df = pd.DataFrame(zip(proper_sells.values, np.full(len(proper_sells), 'Sell')), columns=['Price', 'Decision'],
@@ -231,15 +236,24 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
     else:
         trade_df = buy_df
         trade_df['Closing Price'] = asset_data.loc[trade_df.index, 'Close']
+
         # Calculate Share Balance, Fiat Value, Trade Value, Cost Basis
         trade_df['Trade Value'] = np.round(trade_df['Share Diff'].values * trade_df['Price'].values, 2)
         trade_df.at[:, 'Share Balance'] = trade_df.loc[:, 'Share Diff'].cumsum()
         trade_df.at[:, 'Balance Value'] = trade_df['Price'].values * trade_df['Share Balance'].values
         trade_df.at[:, 'Cost Basis'] = np.divide((trade_df.loc[:, 'Price'] * trade_df.loc[:, 'Share Diff']).cumsum(),
                                                     trade_df.loc[:, 'Share Balance'])
+        trade_df.loc[:, ['Cash Balance', 'RPNL']] = 0
+        # Add in Closing Statement
+        trade_df.loc[statement_end_entry.name, ['Price', 'Closing Price']] = statement_end_entry['Close']
+        trade_df.loc[statement_end_entry.name, ['Share Diff', 'Trade Value']] = 0
+        trade_df.loc[statement_end_entry.name, ['Decision']] = 'Closing Statement'
+        trade_df.loc[:, ['Share Balance', 'Cost Basis']] = \
+            trade_df.loc[:, ['Share Balance', 'Cost Basis']].ffill()
+
         trade_df.loc[:, 'UPNL'] = np.multiply(trade_df.loc[:, 'Price'] - trade_df.loc[:, 'Cost Basis'],
                                               trade_df.loc[:, 'Share Balance'])
-        trade_df.loc[:, ['RPNL', 'Cash Balance']] = 0
+
         return trade_df
 
     carryover_cols = ['Share Balance', 'Balance Value', 'Cash Balance', 'Cost Basis']
@@ -301,16 +315,21 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
         carryover_balance = tuple(tranche.loc[tranche_sell, carryover_cols].values)
         tranche_list.append(tranche)
 
-    # TODO: concat remaining buys
-    # TODO: Add PNL measures
-
     final_pnl = pd.concat(tranche_list)
     if not final_pnl.index[final_pnl['Trade Value'] == 0].empty:
-        final_pnl.drop(final_pnl.index[final_pnl['Trade Value'] == 0], inplace=True) # Remove excess sells
+        final_pnl.drop(final_pnl.index[final_pnl['Trade Value'] == 0], inplace=True)  # Remove excess sells
+
+    # Add in Closing Statement for proper valuation
+    final_pnl.loc[statement_end_entry.name, ['Price', 'Closing Price']] = statement_end_entry['Close']
+    final_pnl.loc[statement_end_entry.name, ['Share Diff', 'Trade Value']] = 0
+    final_pnl.loc[statement_end_entry.name, ['Decision']] = 'Closing Statement'
+    final_pnl.loc[:, ['Share Balance', 'Cost Basis']] = \
+        final_pnl.loc[:, ['Share Balance', 'Cost Basis']].ffill()
 
     mask = final_pnl['Decision'] == 'Sell'
-    profit_margin = (final_pnl.loc[mask, 'Price'] - final_pnl.loc[mask, 'Cost Basis'])
-    final_pnl.loc[mask, 'RPNL'] = (profit_margin * -final_pnl.loc[mask, 'Share Diff']).cumsum()
-    final_pnl = final_pnl.ffill()
+    profit_margin = (final_pnl.loc[:, 'Price'] - final_pnl.loc[:, 'Cost Basis'])
+    final_pnl.loc[mask, 'RPNL'] = (profit_margin.loc[mask] * -final_pnl.loc[mask, 'Share Diff']).cumsum()
     final_pnl.loc[:, 'UPNL'] = np.multiply(profit_margin, final_pnl.loc[:, 'Share Balance'])
+    final_pnl.ffill(inplace=True)
+
     return final_pnl

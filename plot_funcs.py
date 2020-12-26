@@ -3,11 +3,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
-import trade_logic
 
-# TODO: remove plot padding and simplify available plotly overlay options
 
-def plot_candlestick(plot_data, candlesticks=True):
+def plot_price_data(plot_data, candlesticks=True):
 
     # plot_data should have a datetime index & associated name
     figure = go.Figure()
@@ -36,17 +34,21 @@ def plot_decisions(figure, decisions, price_point,  markers=True):
 
     new_fig = go.Figure(figure)
 
+    line_dicts = {
+        'Buys': '#009432',
+        'Sells': '#EA2027'
+    }
+    marker_dicts = {
+        'Buys': dict(color='#009432', size=8, symbol='triangle-up'),
+        'Sells': dict(color='#EA2027', size=8, symbol='triangle-down')
+    }
+
     trades = {'Buys': decisions == 1, 'Sells': decisions == -1}
     if markers:
         for decision in list(trades.keys()):
             mask = trades.get(decision)
-
-            # Add Marker
+            # Add Markers
             decision_price = (price_point.loc[mask] * decisions.loc[mask].abs()).replace(0, np.nan)
-            marker_dicts = {
-                'Buys': dict(color='#009432', size=8, symbol='triangle-up'),
-                'Sells': dict(color='#EA2027', size=8, symbol='triangle-down')
-            }
             marker_name = 'Long Entry' if decision == 'Buy' else 'Short Entry'
             new_fig.add_trace(go.Scatter(x=decision_price.index,
                                         y=decision_price.values,
@@ -58,15 +60,14 @@ def plot_decisions(figure, decisions, price_point,  markers=True):
         shapes = {}
         for decision in list(trades.keys()):
             mask = trades.get(decision)
-            line_dicts = {
-                'Buys': '#009432',
-                'Sells': '#EA2027'
-            }
-            decision_series = decisions.loc[mask]
+
             line_color = line_dicts.get(decision)
-            for date in tuple(decision_series.index.date):
-                shapes[date.strftime('%Y-%m-%d')] = go.layout.Shape(line=dict(color=line_color, width=1),
-                             opacity=0.6, type='line', x0=date, x1=date, xref='x', y0=0, y1=1, yref='y domain')
+            decision_series = decisions.loc[mask]
+
+            if not decision_series.empty:
+                for date in tuple(decision_series.index.date):
+                    shapes[date.strftime('%Y-%m-%d')] = go.layout.Shape(line=dict(color=line_color, width=1),
+                                 opacity=0.6, type='line', x0=date, x1=date, xref='x', y0=0, y1=1, yref='y domain')
         new_fig.update_layout(shapes=list(shapes.values()))
 
     return new_fig

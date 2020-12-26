@@ -11,25 +11,32 @@ import trade_logic
 @st.cache
 def load_ticker(ticker):
     ticker_obj = yf.Ticker(ticker)
-    ticker_data = ticker_obj.history(period='max')
-    details = ticker_obj.info
-    return ticker_data, details
+    try:
+        ticker_data = ticker_obj.history(period='max')
+        details = ticker_obj.info
+        return ticker_data, details
+    except:
+        return None, None
+
 
 @st.cache
 def get_trades(strategy, asset_data, long_bool, gap=0, spans=(None), scaling=1, start=None):
     return trade_logic.get_trades(strategy=strategy, long_bool=long_bool, asset_data=asset_data, gap=gap,
                                     spans=spans, scaling=scaling, start=start)
 
-pages = ['Technical Trading', 'Dollar Cost Averaging']
 
 # Initial App Setup
-st.set_page_config('Strategy Tester', layout='wide')
+st.set_page_config(page_title='Strategy Tester', layout='wide', page_icon="📈")
 st.sidebar.title('Strategy Tester')
+pages = ['Technical Trading', 'Dollar Cost Averaging']
 selected_page = st.sidebar.radio("Strategies", pages)
-selected_ticker = st.sidebar.text_input('Input Your Ticker', 'MSFT')
+selected_ticker = st.sidebar.text_input('Input Your Ticker', 'MSFT').upper()
 st.subheader(selected_page)
 
 history, info = load_ticker(selected_ticker)  # Load in Data
+if history is None and info is None:
+    st.warning('The Selected Ticker is Invalid. Please select a ticker supported by Yahoo Finance.')
+    st.stop()
 history.name = selected_ticker
 start_date = st.sidebar.slider('Select Trading Start Date',
                                min_value=history.index[0].date(),
@@ -42,7 +49,15 @@ allow_fractional = st.sidebar.checkbox('Allow Fractional Shares', value=True)
 sell_all = st.sidebar.checkbox('Sell All Shares on Sell Decision', value=False)
 markers_bool = st.sidebar.checkbox('Use Markers for Decisions', value=False)
 
-
+st.sidebar.title("About")
+st.sidebar.info(
+    "This app is intended to backtest the implemented trading strategies on whichever asset chosen. "
+    "Maintained by **Amy Forest**. \n\n"
+    "This project is available on [GitHub] (https://github.com/amfor/strat_test)"
+)
+st.sidebar.warning(
+    "Note that all returns are hypothetical and not indicative of future performance."
+)
 
 if selected_page == pages[0]:
 
@@ -148,7 +163,7 @@ if selected_page == pages[0]:
     )
 
     # Plot our Trades and MAs along with the close data or candlesticks
-    fig = plot_funcs.plot_candlestick(history, display_candlestick)
+    fig = plot_funcs.plot_price_data(history, display_candlestick)
     display_fig = fig
     display_fig.update_xaxes(range=[start_date, history.index[-1]])
     display_fig = plot_funcs.plot_ma(figure=display_fig, ma_dict=buy_ma_lines, long_bool=True)
@@ -162,6 +177,10 @@ if selected_page == pages[0]:
 
     final_pos = dict(zip(pnl_table.columns, pnl_table.iloc[-1].values))
 
+    with st.beta_expander('View Trade History'):
+        st.dataframe(pnl_table)
+
+
 # Dollar Cost Averaging
 if selected_page == pages[1]:
 
@@ -173,7 +192,7 @@ if selected_page == pages[1]:
 
     time_strategy = ['Open', 'Close']
 
-    weekday_col, strategy_col, interval_col, purchase_col, divisible_col = st.beta_columns(5)
+    weekday_col, strategy_col, interval_col, purchase_col = st.beta_columns(4)
 
     with weekday_col:
         selected_weekday = st.selectbox('Purchase Day', list(weekdays.keys()))
@@ -185,9 +204,8 @@ if selected_page == pages[1]:
         interval_number = trade_logic.interval_strategy.get(selected_interval)
     with purchase_col:
         selected_spend = st.number_input('Recurring Purchase Amount', 250, step=50)
-    with divisible_col:
-        divisible = 0 if 'crypto' in info.get('quoteType').lower() else 1
-        selected_fractional = st.selectbox('Allow Fractional Shares', [True, False], index=divisible)
+
+    divisible = True if 'crypto' in info.get('quoteType').lower() else allow_fractional
 
     dca_data = history.loc[history.index >= pd.to_datetime(start_date)]
     dca_df, purchase_dates = trade_logic.dca_buy_report(asset_data=dca_data,
@@ -195,7 +213,7 @@ if selected_page == pages[1]:
                                         strategy=selected_strategy,
                                         interval=interval_number,
                                         usd_buy_amount=selected_spend,
-                                        allow_fractional=allow_fractional)
+                                        allow_fractional=divisible)
 
     pnl_amount = '{:,.2f}'.format(dca_df['Unrealized PNL'][-1])
     final_balance = dca_df['Balance'][-1]
@@ -210,3 +228,6 @@ if selected_page == pages[1]:
     )
 
     st.plotly_chart(plot_funcs.dca_plot(dca_df, purchase_dates), use_container_width=True, height=2000)
+
+    with st.beta_expander('View Trade History'):
+        st.dataframe(dca_df[dca_df['Shares Bought'] > 0 ])
