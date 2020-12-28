@@ -22,7 +22,7 @@ def load_ticker(ticker):
 @st.cache
 def get_trades(strategy, asset_data, long_bool, gap=0, spans=(None), scaling=1, start=None):
     return trade_logic.get_trades(strategy=strategy, long_bool=long_bool, asset_data=asset_data, gap=gap,
-                                    spans=spans, scaling=scaling, start=start)
+                                  spans=spans, scaling=scaling, start=start)
 
 # Helper for Styling Trades Table
 def color_negative_red(val):
@@ -133,11 +133,11 @@ if selected_page == pages[0]:
 
 
     pnl_table = trade_logic.pnl_calc(asset_data=history,
-                         buy_series=buy_series,
-                         sell_series=sell_series,
-                         trade_size=trade_size,
-                         allow_fractional=allow_fractional,
-                         sell_all=sell_all)
+                                     buy_series=buy_series,
+                                     sell_series=sell_series,
+                                     trade_size=trade_size,
+                                     allow_fractional=allow_fractional,
+                                     sell_all=sell_all)
 
 
     # Get the proper data to plot (What we actually end up trading)
@@ -221,11 +221,11 @@ if selected_page == pages[1]:
 
     dca_data = history.loc[history.index >= pd.to_datetime(start_date)]
     dca_df, purchase_dates = trade_logic.dca_buy_report(asset_data=dca_data,
-                                        weekday=day_number,
-                                        strategy=selected_strategy,
-                                        interval=interval_number,
-                                        usd_buy_amount=selected_spend,
-                                        allow_fractional=divisible)
+                                                        weekday=day_number,
+                                                        strategy=selected_strategy,
+                                                        interval=interval_number,
+                                                        usd_buy_amount=selected_spend,
+                                                        allow_fractional=divisible)
 
     pnl_amount = '{:,.2f}'.format(dca_df['Unrealized PNL'][-1])
     final_balance = dca_df['Share Balance'][-1]

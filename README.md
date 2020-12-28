@@ -1,6 +1,6 @@
 
-# strat_test
-**strat_test** is a strategy tester built on [streamlit](https://github.com/streamlit/streamlit) utilizing [yfinance](https://github.com/ranaroussi/yfinance/) for historical data import. 
+# strategy_tester
+**strategy_tester** is a trading strategy tester built on [streamlit](https://github.com/streamlit/streamlit) utilizing [yfinance](https://github.com/ranaroussi/yfinance/) for historical data import. 
 
 ## Technical Trading
 The following trading strategies are supported on the buy/sell sides:
@@ -20,7 +20,7 @@ Other parameters include:
  - Gap Days between buys (Frequency limitation)
 
 ## Dollar Cost Averaging
-**strat_test** also features a Dollar Cost Averaging page which facilitates the simulation of buying on a recurring schedule during with the following parameters:
+**strategy_tester** also features a Dollar Cost Averaging page which facilitates the simulation of buying on a recurring schedule during with the following parameters:
 
  - Trading Start Date
  - Recurring purchase amount
