@@ -248,6 +248,8 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
 
     sell_df = pd.DataFrame(zip(proper_sells.values, np.full(len(proper_sells), 'Sell')), columns=['Price', 'Decision'],
                            index=proper_sells.index).loc[buy_df.index[0]:]
+    buy_df.drop(sell_series.index & buy_series.index, inplace=True) # Remove overlapping decisions
+
     if not sell_all:
         sell_df['Share Diff'] = -(trade_size / sell_df['Price']) if allow_fractional \
             else -(trade_size / sell_df['Price']).astype(int).replace(0, 1)
