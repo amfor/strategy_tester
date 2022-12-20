@@ -21,4 +21,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENTRYPOINT [ "streamlit", "run", "./src/strategy_tester.py", "--server.port=8080', '--server.address=0.0.0.0' ]
+ENTRYPOINT [ "streamlit", "run", "./src/strategy_tester.py", "--server.port=8080", "--server.address=0.0.0.0" ]

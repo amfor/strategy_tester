@@ -29,6 +29,9 @@ def color_negative_red(val):
     color = '#e55039' if val < 0 else '#60a3bc'
     return 'background-color: %s' % color
 
+dollar_format = lambda  amt: '**' + (':red[' if amt < 0 else ':green[') + '{:,.2f}\$]**'.format(amt)
+
+
 
 # Initial App Setup
 st.set_page_config(page_title='Strategy Tester', layout='wide', page_icon="📈")
@@ -56,8 +59,8 @@ markers_bool = st.sidebar.checkbox('Use Markers for Decisions', value=False)
 
 st.sidebar.title("About")
 st.sidebar.info(
-    "This app is intended to backtest the implemented trading strategies on the chosen asset.\n\n"
-    "Maintained by **Amy Forest** on [GitHub] (https://github.com/amfor/strat_test)"
+    "This app serves to backtest certain trading strategies on the chosen asset.\n\n"
+    "Maintained by **Amy Forest** on [GitHub](https://github.com/amfor/strat_test)"
 )
 st.sidebar.warning(
     "Note that all returns are hypothetical and not indicative of future performance."
@@ -65,7 +68,7 @@ st.sidebar.warning(
 
 if selected_page == pages[0]:
 
-    other_params, buy_params_one, buy_params_two, sell_params_one, sell_params_two = st.beta_columns(5)
+    other_params, buy_params_one, buy_params_two, sell_params_one, sell_params_two = st.columns(5)
 
     available_strategies = list(trade_logic.strategies.keys())
     available_buy_strategies = available_strategies.copy()
@@ -103,7 +106,7 @@ if selected_page == pages[0]:
             sell_ma_span_one = st.number_input('Sell MA Span', value=25, step=5)
         else:
             sell_ma_span_one = None
-        sell_ma_span_two = st.number_input('2nd MA Span (Long Term)', value=150, step=10, key='sell_ma_1') \
+        sell_ma_span_two = st.number_input('2nd MA Span (Long Term)', value=150, step=10, key='sell_ma_2') \
             if 'Crossover' in sell_strategy else None
 
     buy_ma_spans = [buy_ma_span_one, buy_ma_span_two]
@@ -151,19 +154,21 @@ if selected_page == pages[0]:
     # Save and write closing position data
     shares_owned = pnl_table.iloc[-1]['Share Balance']
     balance = np.round(shares_owned, 2) if allow_fractional else int(shares_owned)
-    spend_str = '{:,.2f}$'.format(pnl_table.loc[pnl_table['Decision'] == 'Buy', 'Trade Value'].sum())
-    cash_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['Cash Balance'])
-    value_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['Balance Value'])
-    rpnl_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['RPNL'])
-    upnl_str = '{:,.2f}$'.format(pnl_table.iloc[-1]['UPNL'])
-    total_value = '{:,.2f}$'.format(pnl_table.iloc[-1]['Cash Balance'] + pnl_table.iloc[-1]['UPNL'])
+    spend_str = dollar_format(pnl_table.loc[pnl_table['Decision'] == 'Buy', 'Trade Value'].sum())
+    cash_str = dollar_format(pnl_table.iloc[-1]['Cash Balance'])
+    value_str = dollar_format(pnl_table.iloc[-1]['Balance Value'])
+    rpnl_str = dollar_format(pnl_table.iloc[-1]['RPNL'])
+    upnl_str = dollar_format(pnl_table.iloc[-1]['UPNL'])
+    total_value = dollar_format(pnl_table.iloc[-1]['Cash Balance'] + pnl_table.iloc[-1]['UPNL'])
 
     st.markdown(
-        f"At the end of the trading period, **{balance} shares ** remain, valued at **{value_str}**, "
-        f"with **{cash_str}** of fiat on hand. <br>  Cumulative cash spent is **{spend_str}**, "
-        f"representing **{rpnl_str}** of realized PnL, with **{upnl_str}** of unrealized PnL. <br>"
-        f"Total Fiat Value of portfolio: **{total_value}**",
-        unsafe_allow_html=True
+        f"""
+        At the end of the trading period, **{balance} shares** remain, valued at **{value_str}**, with **{cash_str}** of fiat on hand.  
+
+        Cumulative cash spent is **{spend_str}**, representing **{rpnl_str}** of realized PnL, with **{upnl_str}** of unrealized PnL.  
+
+        Total Fiat Value of portfolio: **{total_value}**  
+        """
     )
 
     # Plot our Trades and MAs along with the close data or candlesticks
@@ -181,7 +186,7 @@ if selected_page == pages[0]:
 
     final_pos = dict(zip(pnl_table.columns, pnl_table.iloc[-1].values))
 
-    with st.beta_expander('View Trade History'):
+    with st.expander('View Trade History'):
         trades_table = pnl_table.copy().drop(['Decision'], axis=1)
         trades_table.index = trades_table.index.strftime('%Y/%m/%d')
         share_columns = ['Share Diff', 'Share Balance']
@@ -204,7 +209,7 @@ if selected_page == pages[1]:
 
     time_strategy = ['Open', 'Close']
 
-    weekday_col, strategy_col, interval_col, purchase_col = st.beta_columns(4)
+    weekday_col, strategy_col, interval_col, purchase_col = st.columns(4)
 
     with weekday_col:
         selected_weekday = st.selectbox('Purchase Day', list(weekdays.keys()))
@@ -219,7 +224,7 @@ if selected_page == pages[1]:
 
     divisible = True if 'crypto' in info.get('quoteType').lower() else allow_fractional
 
-    dca_data = history.loc[history.index >= pd.to_datetime(start_date)]
+    dca_data = history.loc[history.index.tz_localize(None) >= pd.to_datetime(start_date)]
     dca_df, purchase_dates = trade_logic.dca_buy_report(asset_data=dca_data,
                                                         weekday=day_number,
                                                         strategy=selected_strategy,
@@ -227,21 +232,21 @@ if selected_page == pages[1]:
                                                         usd_buy_amount=selected_spend,
                                                         allow_fractional=divisible)
 
-    pnl_amount = '{:,.2f}'.format(dca_df['Unrealized PNL'][-1])
+    pnl_amount = dollar_format(dca_df['Unrealized PNL'][-1])
     final_balance = dca_df['Share Balance'][-1]
     shares_owned = int(final_balance) if float(final_balance).is_integer() else final_balance
-    share_count = '{:,.2f}'.format(final_balance)
-    value_amount = '{:,.2f}'.format(dca_df['Value'][-1])
+    share_count = dollar_format(final_balance)
+    value_amount = dollar_format(dca_df['Value'][-1])
 
     st.markdown(
-        f"The selected trading strategy would've yielded **{share_count} shares**, valued at **{value_amount}$**.<br>  "
-        f"This is equivalent to **{pnl_amount}$ in unrealized profits** assuming a buy & hold strategy.",
+        f"The selected trading strategy would've yielded {share_count} shares, valued at {value_amount}.<br>  "
+        f"This is equivalent to {pnl_amount} in unrealized profits assuming a buy & hold strategy.",
         unsafe_allow_html=True
     )
 
     st.plotly_chart(plot_funcs.dca_plot(dca_df, purchase_dates), use_container_width=True, height=2000)
 
-    with st.beta_expander('View Trade History'):
+    with st.expander('View Trade History'):
         trades_table = dca_df.loc[dca_df['Shares Bought'] > 0]
         trades_table.index = trades_table.index.strftime('%Y/%m/%d')
         pct_columns = ['ROE %']

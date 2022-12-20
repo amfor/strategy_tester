@@ -235,10 +235,10 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
 
         # Calculate Share Balance, Fiat Value, Trade Value, Cost Basis
         trade_df['Trade Value'] = np.round(trade_df['Share Diff'].values * trade_df['Price'].values, 2)
-        trade_df.at[:, 'Share Balance'] = trade_df.loc[:, 'Share Diff'].cumsum()
-        trade_df.at[:, 'Cost Basis'] = np.divide((trade_df.loc[:, 'Price'] * trade_df.loc[:, 'Share Diff']).cumsum(),
+        trade_df.loc[:, 'Share Balance'] = trade_df.loc[:, 'Share Diff'].cumsum()
+        trade_df.loc[:, 'Cost Basis'] = np.divide((trade_df.loc[:, 'Price'] * trade_df.loc[:, 'Share Diff']).cumsum(),
                                                     trade_df.loc[:, 'Share Balance'])
-        trade_df.at[:, 'Balance Value'] = trade_df['Price'].values * trade_df['Share Balance'].values
+        trade_df.loc[:, 'Balance Value'] = trade_df['Price'].values * trade_df['Share Balance'].values
         trade_df.loc[:, ['Cash Balance', 'RPNL']] = 0
         trade_df.loc[:, ['Share Balance', 'Cost Basis']] = \
             trade_df.loc[:, ['Share Balance', 'Cost Basis']].ffill()
@@ -279,28 +279,28 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
 
             # Do not Carry Over Cost Basis is we have shares remaining
             if carryover_balance[0] == 0:
-                tranche.at[tranche_sell, 'Cost Basis'] = 0  # Limit sell to available balance
+                tranche.loc[tranche_sell, 'Cost Basis'] = 0  # Limit sell to available balance
             else:
-                tranche.at[tranche_sell, 'Cost Basis'] = carryover_balance[3]  # Limit sell to available balance
+                tranche.loc[tranche_sell, 'Cost Basis'] = carryover_balance[3]  # Limit sell to available balance
 
             if sell_all:
                 continue
             elif carryover_balance[0] < np.abs(tranche.loc[tranche_sell, 'Share Diff']):
-                tranche.at[tranche_sell, 'Share Diff'] = -carryover_balance[0] # Limit sell to available balance
+                tranche.loc[tranche_sell, 'Share Diff'] = -carryover_balance[0] # Limit sell to available balance
 
         sell_price = tranche.loc[tranche_sell, 'Price']
 
         if sell_all:
             sell_amount = tranche['Share Diff'].sum().round(2)
-            tranche.at[tranche_sell, 'Share Diff'] = -sell_amount
+            tranche.loc[tranche_sell, 'Share Diff'] = -sell_amount
         else:
             sell_amount = tranche.loc[tranche_sell, 'Share Diff'].round(2)
 
         # Calculate Share Balance, Fiat Value, Trade Value, Cost Basis
         tranche['Trade Value'] = np.round(tranche['Share Diff'].values * tranche['Price'].values, 2)
-        tranche.at[:, 'Share Balance'] = tranche.loc[:, 'Share Diff'].cumsum().round(2) + carryover_balance[0]
-        tranche.at[:, 'Balance Value'] = tranche['Price'].values * tranche['Share Balance'].values
-        tranche.at[:, 'Balance Value'] = tranche['Price'].values * tranche['Share Balance'].values
+        tranche.loc[:, 'Share Balance'] = tranche.loc[:, 'Share Diff'].cumsum().round(2) + carryover_balance[0]
+        tranche.loc[:, 'Balance Value'] = tranche['Price'].values * tranche['Share Balance'].values
+        tranche.loc[:, 'Balance Value'] = tranche['Price'].values * tranche['Share Balance'].values
 
         mask = tranche['Decision'] == 'Buy'
         acb_worth = carryover_balance[0] * carryover_balance[3]
@@ -310,7 +310,7 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
         tranche.fillna(method='ffill', inplace=True)  # Fill forward the cost basis (into the sell index)
 
         #  Calculate Sell Amount w/ Carryover Cash Balance
-        tranche.at[tranche_sell, 'Cash Balance'] = np.round(np.abs(sell_amount) * sell_price, 2)
+        tranche.loc[tranche_sell, 'Cash Balance'] = np.round(np.abs(sell_amount) * sell_price, 2)
         tranche['Cash Balance'] = np.round(tranche['Cash Balance'].fillna(0) + carryover_balance[2], 2)
 
         carryover_balance = tuple(tranche.loc[tranche_sell, carryover_cols].values)
