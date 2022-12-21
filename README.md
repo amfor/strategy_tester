@@ -2,6 +2,8 @@
 # strategy_tester
 **strategy_tester** is a trading strategy tester built on [streamlit](https://github.com/streamlit/streamlit) utilizing [yfinance](https://github.com/ranaroussi/yfinance/) for historical data import. 
 
+[Hosted on fly.io](https://strategy-tester.fly.dev/)
+
 ## Technical Trading
 The following trading strategies are supported on the buy/sell sides:
 
