@@ -8,12 +8,12 @@ import datetime
 import plot_funcs
 import trade_logic
 
-@st.cache
-def load_ticker(ticker):
+@st.cache_data
+def load_ticker(ticker, timeframe='max'):
     ticker_obj = yf.Ticker(ticker)
     try:
-        ticker_data = ticker_obj.history(period='max')
-        details = ticker_obj.info
+        ticker_data = ticker_obj.history(period=timeframe)
+        details = ticker_obj.fast_info
         return ticker_data, details
     except:
         return None, None
