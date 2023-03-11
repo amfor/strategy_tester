@@ -14,12 +14,12 @@ def load_ticker(ticker, timeframe='max'):
     try:
         ticker_data = ticker_obj.history(period=timeframe)
         details = ticker_obj.fast_info
-        return ticker_data, details
+        return ticker_data, list(details)
     except:
         return None, None
 
 
-@st.cache
+@st.cache_data
 def get_trades(strategy, asset_data, long_bool, gap=0, spans=(None), scaling=1, start=None):
     return trade_logic.get_trades(strategy=strategy, long_bool=long_bool, asset_data=asset_data, gap=gap,
                                   spans=spans, scaling=scaling, start=start)
