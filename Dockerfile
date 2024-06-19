@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.11
 
 WORKDIR /usr/src/app
 
@@ -9,7 +9,6 @@ RUN apt update \
                 libboost-filesystem-dev \
                 libboost-system-dev \
                 libboost-regex-dev \
-                python-dev \
                 autoconf \
                 flex \
                 bison \
