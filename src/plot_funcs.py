@@ -99,9 +99,10 @@ def dca_plot(dca_data, purchase_dates):
     figure = make_subplots(rows=2, cols=1, shared_xaxes=True,
                            specs=[[{"secondary_y": False}],
                                   [{"secondary_y": True}]],
-                           row_width=[0.65, 0.35]
+                           row_width=[0.65, 0.35],
+                           vertical_spacing=0.02
                            )
-    figure.update_layout(template='plotly_white', margin=dict(l=0))
+    figure.update_layout(template='plotly_white', margin=dict(l=0, t=25), height=600)
 
 
     figure.add_trace(go.Scatter(x=dca_data.index, y=dca_data['Close'],

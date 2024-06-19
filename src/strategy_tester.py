@@ -14,7 +14,7 @@ def load_ticker(ticker, timeframe='max'):
     try:
         ticker_data = ticker_obj.history(period=timeframe)
         details = ticker_obj.fast_info
-        return ticker_data, list(details)
+        return ticker_data, dict(details)
     except:
         return None, None
 
