@@ -248,7 +248,9 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
 
     sell_df = pd.DataFrame(zip(proper_sells.values, np.full(len(proper_sells), 'Sell')), columns=['Price', 'Decision'],
                            index=proper_sells.index).loc[buy_df.index[0]:]
-    buy_df.drop(sell_series.index & buy_series.index, inplace=True) # Remove overlapping decisions
+    import streamlit as st
+
+    buy_df.drop(buy_series.index.intersection(sell_series.index), inplace=True) # Remove overlapping decisions
 
     if not sell_all:
         sell_df['Share Diff'] = -(trade_size / sell_df['Price']) if allow_fractional \
@@ -269,8 +271,14 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
         tranche_until = idx + datetime.timedelta(days=1)
         tranche = trade_df.loc[start_index: tranche_until].copy()
         if tranche_until <= trade_df.index[-1]:
-            start_loc = trade_df.index.get_loc(tranche_until, method='bfill')
-            start_index = trade_df.index[start_loc]
+            pos = trade_df.index.searchsorted(tranche_until, side='left')            
+            if pos < len(trade_df.index) and trade_df.index[pos] < tranche_until:
+                pos += 1
+            if pos < len(trade_df.index):
+                start_index = trade_df.index[pos]
+                print(f"Start Index: {start_index}")
+            else:
+                print("No valid start location found.")
         else:
             break
         tranche_sell = tranche.index[-1]

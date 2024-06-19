@@ -13,6 +13,7 @@ def load_ticker(ticker, timeframe='max'):
     ticker_obj = yf.Ticker(ticker)
     try:
         ticker_data = ticker_obj.history(period=timeframe)
+        ticker_data.index = pd.to_datetime(ticker_data.index).tz_localize(None)
         details = ticker_obj.fast_info
         return ticker_data, dict(details)
     except:
