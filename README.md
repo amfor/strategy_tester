@@ -34,3 +34,20 @@ _Note that all returns are hypothetical and not indicative of future performance
 Furthermore, dividend calculations are not included and some stock prices may be inaccurate due to Yahoo Finance 
 not properly accounting for stock splits due to updating delays._
 
+
+## Set up 
+
+### via Python
+Create yourself a virtualenv, install dependencies and run the app. 
+
+```
+python -m virtualenv ./virtualenv
+source ./virtualenv/bin/activate
+pip install -r requirements-minimal.txt
+streamlit run src/strategy_tester.py
+```
+
+### via docker 
+
+`docker build . -t strategy-tester`
+`docker run -p 8080:8080 strategy-tester`

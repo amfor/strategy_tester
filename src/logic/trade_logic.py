@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime
+import streamlit as st
 
 # Returns simple moving average with provided span
 def sma_line(series, span=None):
@@ -221,7 +222,8 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
     if buy_series.empty:
         return pd.DataFrame(np.full((1, len(table_columns)), 0), columns=table_columns, index=[datetime.date.today()])
 
-    proper_sells = sell_series[buy_series.index[0]:]  # Remove all sells ovvuring prior to first buy date
+
+    proper_sells = sell_series[buy_series.index[0]:] if sell_series.shape[0] > 0 else pd.Series() # Remove all sells occuring prior to first buy date
     statement_end_entry = asset_data.iloc[-1]  # The last date in asset history (to calculate most recent PNLs)
 
     if proper_sells.empty:
@@ -342,3 +344,60 @@ def pnl_calc(asset_data, buy_series, sell_series, trade_size, allow_fractional=T
     final_pnl = final_pnl.ffill().fillna(0)
 
     return final_pnl
+
+
+def process_pnl_table(buy_ma_span_one,
+                      buy_ma_span_two,
+                      sell_ma_span_one,
+                      sell_ma_span_two,
+                      buy_strategy,
+                      sell_strategy,
+                      history,
+                      gap_days=0,
+                      buy_scaling=1.0,
+                      sell_scaling=1.0,
+                      start_date=None,
+                      trade_size=1,
+                      allow_fractional=False,
+                      sell_all=False):
+
+
+    buy_ma_spans = [buy_ma_span_one, buy_ma_span_two]
+    final_buy_spans = buy_ma_spans if pd.notnull(buy_ma_spans).all() else [buy_ma_span_one]
+
+    sell_ma_spans = [sell_ma_span_one, sell_ma_span_two]
+    final_sell_spans = sell_ma_spans if pd.notnull(sell_ma_spans).all() else [sell_ma_span_one]
+
+    # Buy Decisions
+    buy_decision, buy_point, buy_ma_lines = get_trades(
+        strategy=buy_strategy,
+        long_bool=True,
+        asset_data=history,
+        gap=gap_days,
+        spans=final_buy_spans,
+        scaling=buy_scaling
+    )
+    buy_series = (buy_point * buy_decision).replace(0, np.nan).dropna()[start_date:]
+
+    # Sell Decisions
+    sell_decision, sell_point, sell_ma_lines = get_trades(
+        strategy=sell_strategy,
+        long_bool=False,
+        asset_data=history,
+        gap=0,
+        spans=final_sell_spans,
+        scaling=sell_scaling,
+        start=start_date
+    )
+    sell_series = (sell_point * sell_decision).replace(0, np.nan).dropna()
+
+    pnl_table = pnl_calc(
+        asset_data=history,
+        buy_series=buy_series,
+        sell_series=sell_series,
+        trade_size=trade_size,
+        allow_fractional=allow_fractional,
+        sell_all=sell_all
+    )
+
+    return pnl_table, buy_ma_lines, sell_ma_lines
