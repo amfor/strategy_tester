@@ -1,7 +1,6 @@
 FROM python:3.11
 
-WORKDIR /usr/src/app
-
+WORKDIR /app
 RUN apt update \
 	&& apt upgrade -y \
 	&& apt install -y cmake \
@@ -12,13 +11,20 @@ RUN apt update \
                 autoconf \
                 flex \
                 bison \
-		python3-arrow \
-                uv
+		python3-arrow  \ 
+                curl \ 
+                ca-certificates
 
-COPY requirements.txt ./
-RUN uv pip install --upgrade pip && pip install pyarrow
-RUN uv pip install --no-cache-dir -r requirements.txt
+ENV PATH="/root/.local/bin/:$PATH"
+ADD https://astral.sh/uv/0.5.9/install.sh /uv-installer.sh
+RUN sh /uv-installer.sh && rm /uv-installer.sh
 
-COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 
-ENTRYPOINT ["uv", "run", "streamlit", "run", "./src/strategy_tester.py", "--server.port=8080", "--server.address=0.0.0.0" ]
+ADD . /app
+
+ENTRYPOINT []
+CMD ["uv", "run", "streamlit", "run", "./src/strategy_tester.py", "--server.port=8080", "--server.address=0.0.0.0" ]
