@@ -178,7 +178,6 @@ def td_strategy(td_df, long_bool=True, start_date=None):
     countdowns = pd.concat(countdown_list).dropna()
     countdowns = countdowns.loc[~countdowns.index.duplicated('first')].loc[start_date:]
     td_thirteens = countdowns.loc[countdowns==13]
-
     # Ensure TD Countdown meets Qualifier Criteria
     comparison_col = 'Low' if long_bool else 'High'
     prior_date = countdowns.index[0]
@@ -188,17 +187,22 @@ def td_strategy(td_df, long_bool=True, start_date=None):
         thirteen_idx = td_df.index.get_loc(thirteen_date)
         thirteen_low = td_df.loc[thirteen_date, comparison_col]
         thirteen_close = td_df.loc[thirteen_date, 'Close']
-        eight_close = td_df.loc[countdown_subset.index[countdown_subset == 8][-1], 'Close']
-        eleven_low = td_df.loc[countdown_subset.index[countdown_subset == 11][-1], comparison_col]
 
-        if long_bool:
-            qualifier_bool = (thirteen_low <= eight_close) and (thirteen_close <= eleven_low)
+        eight_indices = countdown_subset.index[countdown_subset == 8]
+        eleven_indices = countdown_subset.index[countdown_subset == 11]
+
+        if eight_indices.shape[0] > 0 and eleven_indices.shape[0] > 0:
+            eight_close = td_df.loc[eight_indices[-1], 'Close']
+            eleven_low = td_df.loc[eleven_indices[-1], comparison_col]
+            if long_bool:
+                qualifier_bool = (thirteen_low <= eight_close) and (thirteen_close <= eleven_low)
+            else:
+                qualifier_bool = (thirteen_low >= eight_close) and (thirteen_close >= eleven_low)
         else:
-            qualifier_bool = (thirteen_low >= eight_close) and (thirteen_close >= eleven_low)
-
+            qualifier_bool = False
         if not qualifier_bool:
             td_thirteens.drop(thirteen_date, inplace=True)
-        prior_date = until_date
+        prior_date = until_date - datetime.timedelta(days=1)
 
     decision = (countdowns == 13).astype(int)
     trade_point = td_df.loc[:, 'Close']

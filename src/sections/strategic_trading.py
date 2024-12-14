@@ -12,12 +12,12 @@ available_buy_strategies = available_strategies.copy()
 available_buy_strategies.remove('Hold/None')
 
 with other_params:
-    trade_size = st.number_input('Enter Trade Value', value=250, step=50)
+    trade_size = st.number_input('Enter Trade Value', value=500, step=100)
     gap_days = st.number_input('Minimum Gap Days Between Buys', value=7, step=1)
 
 with buy_params_one:
     buy_strategy = st.selectbox('Select Buying Strategy', available_buy_strategies)
-    buy_scaling = st.number_input('MA Scaling (<=1.00)', value=0.95, step=0.025) \
+    buy_scaling = st.number_input('MA Scaling (<=1.00)', value=0.975, step=0.025) \
         if pd.Series([_ not in buy_strategy for _ in ['Crossover', 'Countdown']]).all() else None
 
 with buy_params_two:
@@ -119,6 +119,7 @@ with summary_cols[1]:
 with st.expander('View Trade History'):
     trades_table = pnl_table.copy().drop(['Decision'], axis=1)
     trades_table.index = trades_table.index.strftime('%Y/%m/%d')
+    trades_table = trades_table.loc[~trades_table.duplicated(keep='last')]
     share_columns = ['Share Diff', 'Share Balance']
     float_columns = list(set(trades_table.dtypes[trades_table.dtypes == float].index).difference(share_columns))
     st.table(trades_table.style.format(
