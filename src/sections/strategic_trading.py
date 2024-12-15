@@ -79,7 +79,7 @@ cash_str = dollar_format(pnl_table.iloc[-1]['Cash Balance'])
 value_str = dollar_format(pnl_table.iloc[-1]['Balance Value'])
 rpnl_str = dollar_format(pnl_table.iloc[-1]['RPNL'])
 upnl_str = dollar_format(pnl_table.iloc[-1]['UPNL'])
-total_value = dollar_format(pnl_table.iloc[-1]['Cash Balance'] + pnl_table.iloc[-1]['UPNL'])
+total_value = dollar_format(pnl_table.iloc[-1]['Cash Balance'] + pnl_table.iloc[-1]['Balance Value'])
 
 # Plot our Trades and MAs along with the close data or candlesticks
 fig = plot_funcs.plot_price_data(st.session_state['history'], st.session_state.get('display_candlestick', app_defaults['display_candlestick']))
